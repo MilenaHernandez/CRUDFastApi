@@ -1,28 +1,55 @@
-from fastapi import  APIRouter, Header
-from pydantic import BaseModel, EmailStr
+from fastapi import APIRouter, Header
+from fastapi.params import Depends
+from sqlalchemy.orm import Session
+
+from config.db import engine, conn
 from funtions_jwt import write_token, validate_token
 from fastapi.responses import JSONResponse
 
+from models import user_model
+from models.user_model import UserModel
+from schemas.user_schema import UserAuthenticaSchema
+
 auth_routes = APIRouter()
+user_model.Base.metadata.create_all(bind=engine)
 
 
-class User(BaseModel):
-    email: EmailStr
-    password: str
+def get_db():
+    try:
+        db = conn()
+        yield db
+    finally:
+        db.close()
 
 
 @auth_routes.post("/login")
-def login(user: User):
-    print(user.dict())
-    """Aqui debe hacerce la validacion contra la base de datos 
-    de usuarios registrados, ejemplo quemado"""
-    if user.email == "mhernandez@correo.com" and user.password == "1234":
-        return write_token(user.dict())
-    else:
+def login(userAuthen: UserAuthenticaSchema, db: Session = Depends(get_db)):
+    print(userAuthen.dict())
+    user = db.query(UserModel).filter_by(email=userAuthen.email, password=userAuthen.password).first()
+    if user is None:
         return JSONResponse(content={"message": "Usuario no valido"}, status_code=404)
+    else:
+        return write_token(userAuthen.dict())
 
 
 @auth_routes.post("/verify/token")
-def verify_token(Authorization: str = Header(None)):
-    token = Authorization.split(" ")[1]
+def verify_token(Authorized: str = Header(None)):
+    token = Authorized.split(" ")[1]
     return validate_token(token, output=True)
+
+
+@auth_routes.post("/register")
+def register(newUser: UserAuthenticaSchema, db: Session = Depends(get_db)):
+    user = db.query(UserModel).filter_by(email=newUser.email).first()
+    if user is None:
+        if user.password.equal(newUser.password):
+            user = UserModel(email=newUser.email,
+                             password=newUser.password)
+            db.add(user)
+            db.commit()
+            db.refresh(user)
+            return JSONResponse(content={"message": "Usuario registrado" + newUser.dict()}, status_code=200)
+        else:
+            return JSONResponse(content={"message": "Contraseña incorrecta"}, status_code=200)
+    else:
+        return JSONResponse(content={"message": "Usuario ya existe"}, status_code=200)

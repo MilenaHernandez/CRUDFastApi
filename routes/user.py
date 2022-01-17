@@ -10,7 +10,7 @@ from models import user_model
 from models.user_model import UserModel
 from schemas.user_schema import UserCreateSchema, UserUpdateSchema, UserReadSchema
 
-user = APIRouter()#route_class=VerifyTokenRoute)
+user = APIRouter(route_class=VerifyTokenRoute)
 user_model.Base.metadata.create_all(bind=engine)
 
 

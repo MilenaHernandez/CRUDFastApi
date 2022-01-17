@@ -24,12 +24,14 @@ def get_db():
 
 @auth_routes.post("/login")
 def login(userAuthen: UserAuthenticaSchema, db: Session = Depends(get_db)):
-    print(userAuthen.dict())
-    user = db.query(UserModel).filter_by(email=userAuthen.email, password=userAuthen.password).first()
-    if user is None:
-        return JSONResponse(content={"message": "Usuario no valido"}, status_code=404)
+    user = db.query(UserModel).filter_by(email=userAuthen.email).first()
+    if user is not None:
+        if user.password == userAuthen.password:
+            return write_token(userAuthen.dict())
+        else:
+            return JSONResponse(content={"message": "Contraseña incorrecta"}, status_code=401)
     else:
-        return write_token(userAuthen.dict())
+        return JSONResponse(content={"message": "Usuario no valido"}, status_code=401)
 
 
 @auth_routes.post("/verify/token")
@@ -42,14 +44,11 @@ def verify_token(Authorized: str = Header(None)):
 def register(newUser: UserAuthenticaSchema, db: Session = Depends(get_db)):
     user = db.query(UserModel).filter_by(email=newUser.email).first()
     if user is None:
-        if user.password.equal(newUser.password):
-            user = UserModel(email=newUser.email,
-                             password=newUser.password)
-            db.add(user)
-            db.commit()
-            db.refresh(user)
-            return JSONResponse(content={"message": "Usuario registrado" + newUser.dict()}, status_code=200)
-        else:
-            return JSONResponse(content={"message": "Contraseña incorrecta"}, status_code=200)
+        user = UserModel(email=newUser.email,
+                         password=newUser.password)
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+        return JSONResponse(content={"message": "Usuario registrado "+ newUser.email}, status_code=201)
     else:
         return JSONResponse(content={"message": "Usuario ya existe"}, status_code=200)
